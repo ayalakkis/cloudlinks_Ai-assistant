@@ -1,6 +1,44 @@
+import base64
+import json
+import os
+import urllib.error
+import urllib.request
+
 from dateutil import parser as dateutil_parser
 
 import db
+
+
+def _notify_meeting_confirmed(meeting: dict) -> bool:
+    """POSTs the confirmed meeting to the automation webhook (if one is configured
+    in .env), using HTTP Basic Auth. Returns True/False for success; never raises,
+    so a webhook outage can never block a meeting from being saved."""
+    # Read the webhook settings fresh on each call (not at import time), since this
+    # module can be imported before .env has been loaded by assistant.py.
+    webhook_url = os.environ.get("MEETING_WEBHOOK_URL")
+    if not webhook_url:
+        return False
+
+    body = json.dumps(meeting).encode("utf-8")  # the meeting record, sent as JSON
+    request = urllib.request.Request(webhook_url, data=body, method="POST")
+    request.add_header("Content-Type", "application/json")
+    # Cloudflare (in front of the webhook) blocks Python's default User-Agent as a
+    # bot signature (HTTP 403, Cloudflare error 1010) -- a normal-looking one passes.
+    request.add_header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AssistantBot/1.0")
+
+    username = os.environ.get("MEETING_WEBHOOK_USERNAME")
+    password = os.environ.get("MEETING_WEBHOOK_PASSWORD")
+    if username:
+        # Basic Auth header = base64("username:password")
+        creds = base64.b64encode(f"{username}:{password}".encode("utf-8")).decode("ascii")
+        request.add_header("Authorization", f"Basic {creds}")
+
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            return 200 <= response.status < 300
+    except (urllib.error.URLError, urllib.error.HTTPError) as exc:
+        print(f"[warning] meeting confirmation webhook failed: {exc}")
+        return False
 
 
 def get_info(query: str) -> list[str]:
@@ -33,7 +71,10 @@ def schedule_meeting(
     if end_dt <= start_dt:
         return {"error": "end_time must be after start_time"}
 
-    return db.insert_meeting(title, start_time, end_time, participants, notes)
+    record = db.insert_meeting(title, start_time, end_time, participants, notes)
+    # Notify the automation webhook now that the meeting is actually confirmed/saved.
+    record["confirmation_sent"] = _notify_meeting_confirmed(record)
+    return record
 
 
 def list_meetings(from_date: str = None, to_date: str = None) -> list[dict]:
