@@ -19,7 +19,13 @@ def _notify_meeting_confirmed(meeting: dict) -> bool:
     if not webhook_url:
         return False
 
-    body = json.dumps(meeting).encode("utf-8")  # the meeting record, sent as JSON
+    participants = ", ".join(meeting["participants"])
+    content = f"{meeting['title']} is scheduled from {meeting['start_time']} to {meeting['end_time']} with {participants}."
+    if meeting.get("notes"):
+        content += f" Notes: {meeting['notes']}"
+
+    payload = {**meeting, "subject": meeting["title"], "content": content}
+    body = json.dumps(payload).encode("utf-8")  # the meeting record plus subject/content, sent as JSON
     request = urllib.request.Request(webhook_url, data=body, method="POST")
     request.add_header("Content-Type", "application/json")
     # Cloudflare (in front of the webhook) blocks Python's default User-Agent as a
