@@ -1,5 +1,3 @@
-"""SQLite access layer for the info table and the meetings table."""
-
 import json
 import os
 import sqlite3
@@ -14,7 +12,7 @@ def _get_conn() -> sqlite3.Connection:
     return conn
 
 
-def init_db() -> None: #This function does not return a value.
+def init_db() -> None:
     os.makedirs(DB_DIR, exist_ok=True)
     conn = _get_conn()
     try:
@@ -47,20 +45,20 @@ def init_db() -> None: #This function does not return a value.
         conn.close()
 
 
-def insert_info(category: str, content: str) -> dict:#This function is a helper used to insert test or reference data into the info table.
+def insert_info(category: str, content: str) -> dict:
     conn = _get_conn()
     try:
         cursor = conn.execute(
             "INSERT INTO info (category, content) VALUES (?, ?)",
             (category, content),
         )
-        conn.commit()#saves the inserted row
-        return get_info_entry(cursor.lastrowid)#instead of returning just the ID, this function returns the complete newly created record
+        conn.commit()
+        return get_info_entry(cursor.lastrowid)
     finally:
         conn.close()
 
 
-def get_info_entry(info_id: int) -> dict:#retrieves one piece of information from the database using its id
+def get_info_entry(info_id: int) -> dict:
     conn = _get_conn()
     try:
         row = conn.execute("SELECT * FROM info WHERE id = ?", (info_id,)).fetchone()
@@ -69,10 +67,7 @@ def get_info_entry(info_id: int) -> dict:#retrieves one piece of information fro
         conn.close()
 
 
-def get_info_entries(query: str) -> list[str]:#This function is the database search part
-    """Keyword search over info.content: matches rows containing any word from the
-    query (not just the whole phrase). Returns matching content strings, empty if
-    none/no data."""
+def get_info_entries(query: str) -> list[str]:
     words = [w for w in query.split() if w]
     if not words:
         return []
@@ -122,7 +117,6 @@ def insert_meeting(
 
 
 def list_meetings(from_date: str = None, to_date: str = None) -> list[dict]:
-    """Returns non-cancelled meetings, optionally filtered by an ISO date/datetime range."""
     conn = _get_conn()
     try:
         query = "SELECT * FROM meetings WHERE status != 'cancelled'"

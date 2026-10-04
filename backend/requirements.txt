@@ -1,0 +1,8 @@
+openai
+python-dotenv
+python-dateutil
+fastapi
+uvicorn
+qdrant-client
+PyMuPDF
+python-multipart

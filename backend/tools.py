@@ -7,14 +7,12 @@ import urllib.request
 from dateutil import parser as dateutil_parser
 
 import db
+from search import search_documents as search_documents_in_qdrant
+
+MIN_RELEVANCE_SCORE = 0.4
 
 
 def _notify_meeting_confirmed(meeting: dict) -> bool:
-    """POSTs the confirmed meeting to the automation webhook (if one is configured
-    in .env), using HTTP Basic Auth. Returns True/False for success; never raises,
-    so a webhook outage can never block a meeting from being saved."""
-    # Read the webhook settings fresh on each call (not at import time), since this
-    # module can be imported before .env has been loaded by assistant.py.
     webhook_url = os.environ.get("MEETING_WEBHOOK_URL")
     if not webhook_url:
         return False
@@ -25,17 +23,14 @@ def _notify_meeting_confirmed(meeting: dict) -> bool:
         content += f" Notes: {meeting['notes']}"
 
     payload = {**meeting, "subject": meeting["title"], "content": content}
-    body = json.dumps(payload).encode("utf-8")  # the meeting record plus subject/content, sent as JSON
+    body = json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(webhook_url, data=body, method="POST")
     request.add_header("Content-Type", "application/json")
-    # Cloudflare (in front of the webhook) blocks Python's default User-Agent as a
-    # bot signature (HTTP 403, Cloudflare error 1010) -- a normal-looking one passes.
     request.add_header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AssistantBot/1.0")
 
     username = os.environ.get("MEETING_WEBHOOK_USERNAME")
     password = os.environ.get("MEETING_WEBHOOK_PASSWORD")
     if username:
-        # Basic Auth header = base64("username:password")
         creds = base64.b64encode(f"{username}:{password}".encode("utf-8")).decode("ascii")
         request.add_header("Authorization", f"Basic {creds}")
 
@@ -48,8 +43,13 @@ def _notify_meeting_confirmed(meeting: dict) -> bool:
 
 
 def get_info(query: str) -> list[str]:
-    """Keyword search over the info table. Empty list if nothing matches or the table is empty."""
     return db.get_info_entries(query)
+
+
+def search_documents(question: str) -> dict:
+    results = search_documents_in_qdrant(question)
+    relevant_chunks = [r["text"] for r in results if r["score"] >= MIN_RELEVANCE_SCORE]
+    return {"chunks": relevant_chunks}
 
 
 def schedule_meeting(
@@ -59,7 +59,6 @@ def schedule_meeting(
     participants: list[str],
     notes: str = "",
 ) -> dict:
-    """Validates inputs and inserts a meeting record. Returns the created record or {"error": ...}."""
     if not title or not isinstance(title, str):
         return {"error": "title is required"}
 
@@ -78,18 +77,15 @@ def schedule_meeting(
         return {"error": "end_time must be after start_time"}
 
     record = db.insert_meeting(title, start_time, end_time, participants, notes)
-    # Notify the automation webhook now that the meeting is actually confirmed/saved.
     record["confirmation_sent"] = _notify_meeting_confirmed(record)
     return record
 
 
 def list_meetings(from_date: str = None, to_date: str = None) -> list[dict]:
-    """Returns meetings, optionally filtered to an ISO date/datetime range."""
     return db.list_meetings(from_date=from_date, to_date=to_date)
 
 
 def cancel_meeting(meeting_id: int) -> dict:
-    """Cancels a scheduled meeting by id. Returns the updated record or {"error": ...}."""
     meeting = db.get_meeting(meeting_id)
     if not meeting:
         return {"error": f"no meeting found with id {meeting_id}"}
@@ -105,10 +101,13 @@ TOOLS = [
         "function": {
             "name": "get_info",
             "description": (
-                "Search stored reference/knowledge info by keyword — e.g. support hours, "
-                "policies, pricing, team info, and to-do/priority items (including weekly "
-                "and monthly to-do lists). Returns a list of matching text snippets, or an "
-                "empty list if nothing is stored or nothing matches."
+                "Search short internal reference notes by keyword — e.g. support hours, "
+                "team info, and to-do/priority items (including weekly and monthly to-do "
+                "lists). This is a small manually-entered notes table, NOT the uploaded "
+                "PDF/TXT documents — for questions about offers, discounts, or anything "
+                "from an uploaded file, use `search_documents` instead. Returns a list of "
+                "matching text snippets, or an empty list if nothing is stored or nothing "
+                "matches."
             ),
             "parameters": {
                 "type": "object",
@@ -195,6 +194,29 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_documents",
+            "description": (
+                "Search the uploaded documents (PDF/TXT files, e.g. offers, policies, "
+                "brochures) for content relevant to a question. Returns matching text "
+                "chunks, or an empty list if nothing relevant was found -- in that case, "
+                "tell the user you don't have enough information from the uploaded "
+                "documents instead of guessing."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "question": {
+                        "type": "string",
+                        "description": "The user's question, used to search the documents.",
+                    },
+                },
+                "required": ["question"],
+            },
+        },
+    },
 ]
 
 TOOL_IMPLEMENTATIONS = {
@@ -202,4 +224,5 @@ TOOL_IMPLEMENTATIONS = {
     "schedule_meeting": schedule_meeting,
     "list_meetings": list_meetings,
     "cancel_meeting": cancel_meeting,
+    "search_documents": search_documents,
 }

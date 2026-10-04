@@ -1,0 +1,64 @@
+/* Site-wide colors and styling. Change --accent here to change the app's
+   main color everywhere (buttons, user's chat bubble, focus outline, etc). */
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  --accent: #4f46e5;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-accent: var(--accent);
+  --font-sans: var(--font-sans);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+    --accent: #818cf8;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Rendered markdown inside assistant messages */
+.prose-message > :first-child {
+  margin-top: 0;
+}
+.prose-message > :last-child {
+  margin-bottom: 0;
+}
+.prose-message p {
+  margin: 0.5em 0;
+}
+.prose-message ul,
+.prose-message ol {
+  margin: 0.5em 0;
+  padding-left: 1.25em;
+}
+.prose-message ul {
+  list-style: disc;
+}
+.prose-message ol {
+  list-style: decimal;
+}
+.prose-message li {
+  margin: 0.2em 0;
+}
+.prose-message strong {
+  font-weight: 600;
+}
+.prose-message code {
+  background: rgba(127, 127, 127, 0.15);
+  border-radius: 0.25em;
+  padding: 0.1em 0.35em;
+  font-size: 0.9em;
+}
