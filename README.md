@@ -1,13 +1,23 @@
-# Cloudlinks Assistant
+# CloudLinks Assistant
 
-An assistant with OpenAI function-calling tools: an info lookup (`get_info`)
-backed by a local SQLite table, and a meeting scheduler (`schedule_meeting` /
-`list_meetings` / `cancel_meeting`) that saves records to the same database.
+A conversational assistant built on OpenAI function calling. It answers questions from a local knowledge table and manages meetings (schedule, list, cancel) through natural-language chat, from either a command line or a web interface.
 
-It can be used two ways:
-- **CLI** (`backend/main.py`) — talks to the `Assistant` class directly.
-- **Web UI** (`frontend/`) — a Next.js chat app that talks to a small FastAPI
-  wrapper (`backend/api.py`) around the same `Assistant` class.
+## Features
+
+- Information lookup (`get_info`) backed by a local SQLite table
+- Meeting management (`schedule_meeting`, `list_meetings`, `cancel_meeting`) stored in the same database
+- Tool-calling loop capped at four iterations per turn
+- Two interfaces: a CLI and a Next.js chat app
+
+## Tech stack
+
+- **Backend:** Python, OpenAI Chat Completions with function calling, FastAPI, SQLite
+- **Frontend:** Next.js and TypeScript
+
+## Interfaces
+
+- **CLI** (`backend/main.py`): talks to the `Assistant` class directly.
+- **Web UI** (`frontend/`): a Next.js chat app that talks to a small FastAPI wrapper (`backend/api.py`) around the same `Assistant` class.
 
 ## Setup
 
